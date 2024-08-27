@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>License Plate Recognition</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color:#181818;;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            color: darkgrey;
+            margin-top: 20px;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        .container {
+            margin: 50px auto;
+            max-width: 600px;
+            padding: 20px;
+            background-color: #252525;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            animation: slideIn 1s ease-in-out;
+        }
+
+        .file-input, .camera-input {
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: bounceIn 1s ease-in-out;
+        }
+
+        .file-input input[type="file"], .camera-input input[type="button"] {
+            display: none;
+        }
+
+        .file-input label, .camera-input label {
+            background-color: #27AE60;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .file-input label:hover, .camera-input label:hover {
+            background-color: #0056b3;
+        }
+
+        .results {
+            margin-top: 20px;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        .results img {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            animation: zoomIn 0.5s ease-in-out;
+        }
+
+        .results p {
+            font-size: 18px;
+            color: #ffffff;
+            animation: fadeIn 2s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes bounceIn {
+            from {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes zoomIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        video {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>License Plate Recognition</h1>
+    <div class="container">
+        <div class="file-input">
+            <input type="file" id="fileInput" accept="image/*">
+            <label for="fileInput">Upload Vehicle Image</label>
+        </div>
+        <div class="camera-input">
+            <input type="button" id="cameraButton">
+            <label for="cameraButton" id="cameraLabel">Capture LPR from Camera</label>
+            <video id="video" width="600" height="400" autoplay></video>
+            <button id="capture" style="display:none;">Capture</button>
+        </div>
+        <div class="results" id="results" style="display:none;">
+            <img id="uploadedImage" src="" alt="Uploaded Image">
+            <p id="plateText"></p>
+            <p id="stateName"></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('uploadedImage').src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+
+                var formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('plateText').innerText = data.error;
+                        document.getElementById('stateName').innerText = '';
+                    } else {
+                        document.getElementById('plateText').innerText = 'License Plate: ' + data.plate_text;
+                        document.getElementById('stateName').innerText = 'State: ' + data.state;
+                    }
+                    document.getElementById('results').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+            }
+        });
+
+        document.getElementById('cameraLabel').addEventListener('click', function() {
+            var video = document.getElementById('video');
+            var captureButton = document.getElementById('capture');
+            var constraints = { video: true };
+
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(function(stream) {
+                    video.style.display = 'block';
+                    captureButton.style.display = 'block';
+                    video.srcObject = stream;
+                })
+                .catch(function(error) {
+                    console.error('Error accessing webcam:', error);
+                });
+
+            captureButton.addEventListener('click', function() {
+                var canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                var context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                canvas.toBlob(function(blob) {
+                    var formData = new FormData();
+                    formData.append('file', blob, 'capture.png');
+
+                    fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            document.getElementById('plateText').innerText = data.error;
+                            document.getElementById('stateName').innerText = '';
+                        } else {
+                            document.getElementById('uploadedImage').src = canvas.toDataURL();
+                            document.getElementById('plateText').innerText = 'License Plate: ' + data.plate_text;
+                            document.getElementById('stateName').innerText = 'State: ' + data.state;
+                        }
+                        document.getElementById('results').style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+
+                    video.style.display = 'none';
+                    captureButton.style.display = 'none';
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                });
+            });
+        });
+    </script>
+</body>
+</html>
